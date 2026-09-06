@@ -1,4 +1,4 @@
-import { access, mkdir, rename, unlink } from "node:fs/promises";
+import { access, link, mkdir, open, unlink } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import type { PreparedDestination } from "./types.js";
 
@@ -20,12 +20,12 @@ export function sanitizeStoredFilename(filename: string): string {
   return sanitized;
 }
 
-function isMissingPathError(error: unknown): boolean {
+function hasErrorCode(error: unknown, code: string): boolean {
   return (
     typeof error === "object" &&
     error !== null &&
     "code" in error &&
-    error.code === "ENOENT"
+    error.code === code
   );
 }
 
@@ -34,7 +34,20 @@ async function pathExists(path: string): Promise<boolean> {
     await access(path);
     return true;
   } catch (error) {
-    if (isMissingPathError(error)) {
+    if (hasErrorCode(error, "ENOENT")) {
+      return false;
+    }
+    throw error;
+  }
+}
+
+async function reservePartialPath(path: string): Promise<boolean> {
+  try {
+    const handle = await open(path, "wx");
+    await handle.close();
+    return true;
+  } catch (error) {
+    if (hasErrorCode(error, "EEXIST")) {
       return false;
     }
     throw error;
@@ -58,21 +71,33 @@ export async function prepareDestination(
     const finalPath = join(directory, `${name}${suffixText}${extension}`);
     const partialPath = `${finalPath}.part`;
 
-    if (!(await pathExists(finalPath)) && !(await pathExists(partialPath))) {
-      return { directory, finalPath, partialPath };
+    if (await pathExists(finalPath)) {
+      continue;
     }
+
+    if (!(await reservePartialPath(partialPath))) {
+      continue;
+    }
+
+    if (await pathExists(finalPath)) {
+      await unlink(partialPath);
+      continue;
+    }
+
+    return { directory, finalPath, partialPath };
   }
 }
 
 export async function finalizeDownload(partialPath: string, finalPath: string): Promise<void> {
-  await rename(partialPath, finalPath);
+  await link(partialPath, finalPath);
+  await unlink(partialPath);
 }
 
 export async function removeFileIfPresent(path: string): Promise<void> {
   try {
     await unlink(path);
   } catch (error) {
-    if (!isMissingPathError(error)) {
+    if (!hasErrorCode(error, "ENOENT")) {
       throw error;
     }
   }

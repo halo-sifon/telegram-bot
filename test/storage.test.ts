@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { access, mkdir, mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -30,6 +30,7 @@ describe("storage", () => {
     const destination = await prepareDestination(root, "report.pdf", new Date(2026, 7, 15));
 
     await expect(stat(destination.directory)).resolves.toBeDefined();
+    await expect(access(destination.partialPath)).resolves.toBeUndefined();
   });
 
   it("同名文件绝不覆盖，而是使用数字后缀", async () => {
@@ -51,6 +52,21 @@ describe("storage", () => {
 
     expect(destination.finalPath).toBe(join(root, "2026", "08", "report (1).pdf"));
     expect(destination.partialPath).toBe(`${destination.finalPath}.part`);
+  });
+
+  it("并发准备时为每个下载原子预留不同临时路径", async () => {
+    root = await mkdtemp(join(tmpdir(), "telegram-storage-"));
+
+    const destinations = await Promise.all([
+      prepareDestination(root, "report.pdf", new Date(2026, 7, 15)),
+      prepareDestination(root, "report.pdf", new Date(2026, 7, 15)),
+    ]);
+
+    expect(new Set(destinations.map(({ finalPath }) => finalPath)).size).toBe(2);
+    expect(new Set(destinations.map(({ partialPath }) => partialPath)).size).toBe(2);
+    for (const destination of destinations) {
+      await expect(access(destination.partialPath)).resolves.toBeUndefined();
+    }
   });
 
   it("清理文件名后不会把路径穿越到月度目录之外", async () => {
@@ -81,6 +97,18 @@ describe("storage", () => {
 
     await expect(readFile(finalPath, "utf8")).resolves.toBe("complete");
     await expect(access(partialPath)).rejects.toMatchObject({ code: "ENOENT" });
+  });
+
+  it("存在最终文件时定稿拒绝覆盖并保留两份文件", async () => {
+    root = await mkdtemp(join(tmpdir(), "telegram-storage-"));
+    const partialPath = join(root, "download.pdf.part");
+    const finalPath = join(root, "download.pdf");
+    await writeFile(partialPath, "replacement");
+    await writeFile(finalPath, "original");
+
+    await expect(finalizeDownload(partialPath, finalPath)).rejects.toMatchObject({ code: "EEXIST" });
+    await expect(readFile(finalPath, "utf8")).resolves.toBe("original");
+    await expect(readFile(partialPath, "utf8")).resolves.toBe("replacement");
   });
 
   it("删除已存在文件并忽略文件不存在", async () => {
