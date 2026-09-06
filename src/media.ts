@@ -326,7 +326,7 @@ export async function downloadMediaToStorage(input: {
   try {
     await input.status.update(`⬇️ 正在下载 ${input.descriptor.type}...`);
 
-    let previouslyReportedPercent = -1;
+    let previouslyReportedPercent = 0;
     await input.downloader.download(
       input.descriptor.source,
       destination.partialPath,

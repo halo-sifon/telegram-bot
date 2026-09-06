@@ -79,6 +79,7 @@ describe("media metadata", () => {
 describe("media progress", () => {
   it("仅在每增加 5% 或完成时更新进度", () => {
     expect(shouldReportProgress(-1, 1, 100)).toBe(false);
+    expect(shouldReportProgress(0, 4, 100)).toBe(false);
     expect(shouldReportProgress(0, 5, 100)).toBe(true);
     expect(shouldReportProgress(95, 100, 100)).toBe(true);
     expect(shouldReportProgress(0, 1, 0)).toBe(false);
