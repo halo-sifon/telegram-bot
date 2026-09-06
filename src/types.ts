@@ -19,3 +19,15 @@ export interface PreparedDestination {
   finalPath: string;
   partialPath: string;
 }
+
+export interface MediaDownloader {
+  download(
+    source: unknown,
+    outputFile: string,
+    onProgress: (downloadedBytes: number, totalBytes: number) => Promise<void>,
+  ): Promise<void>;
+}
+
+export interface StatusReporter {
+  update(text: string): Promise<void>;
+}
