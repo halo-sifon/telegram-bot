@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createMessageHandler,
+  createStatusReporter,
   isAuthorizedPrivateSender,
 } from "../src/bot.js";
 import type { AppConfig } from "../src/config.js";
@@ -68,5 +69,14 @@ describe("authorization", () => {
     expect(reply).toHaveBeenCalledOnce();
     expect(reply).toHaveBeenCalledWith("可直接发送支持的媒体，文件会保存至本地月份目录。");
     expect(downloader.download).not.toHaveBeenCalled();
+  });
+
+  it("使用 GramJS 的 text 参数编辑状态消息", async () => {
+    const edit = vi.fn().mockResolvedValue(undefined);
+    const reporter = createStatusReporter({ edit });
+
+    await reporter.update("⬇️ 正在下载 文件...");
+
+    expect(edit).toHaveBeenCalledWith({ text: "⬇️ 正在下载 文件..." });
   });
 });

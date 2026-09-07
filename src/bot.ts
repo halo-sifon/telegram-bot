@@ -27,7 +27,7 @@ interface GramJsMessage {
 }
 
 interface GramJsStatusMessage {
-  edit(params: { message: string }): Promise<unknown>;
+  edit(params: { text: string }): Promise<unknown>;
 }
 
 interface GramJsEvent {
@@ -81,10 +81,10 @@ export function createMessageHandler(deps: {
   };
 }
 
-function statusReporter(message: GramJsStatusMessage): StatusReporter {
+export function createStatusReporter(message: GramJsStatusMessage): StatusReporter {
   return {
     update: async (text) => {
-      await message.edit({ message: text });
+      await message.edit({ text });
     },
   };
 }
@@ -117,7 +117,7 @@ function adaptIncomingMessage(event: GramJsEvent): IncomingMessage {
       if (!status) {
         throw new Error("Telegram 未返回状态消息");
       }
-      return statusReporter(status);
+      return createStatusReporter(status);
     },
   };
 }
