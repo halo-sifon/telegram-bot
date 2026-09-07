@@ -16,11 +16,17 @@ interface RecordLike {
   [key: string]: unknown;
 }
 
+/**
+ * 每种媒体类型的用户可见中文标签与回退扩展名。
+ */
 interface MediaKind {
   type: SupportedMediaType;
   extension: string;
 }
 
+/**
+ * type 是用户可见的中文标签;extension 只在无原始文件名时用于回退命名。
+ */
 const MEDIA_KINDS: Record<SupportedMediaType, MediaKind> = {
   图片: { type: "图片", extension: ".jpg" },
   视频: { type: "视频", extension: ".mp4" },
@@ -31,10 +37,16 @@ const MEDIA_KINDS: Record<SupportedMediaType, MediaKind> = {
   视频消息: { type: "视频消息", extension: ".mp4" },
 };
 
+/**
+ * 收窄 unknown 为可索引对象。
+ */
 function isRecord(value: unknown): value is RecordLike {
   return typeof value === "object" && value !== null;
 }
 
+/**
+ * 读取对象上的字段,null/undefined 统一视为缺失。
+ */
 function mediaValue(source: unknown, key: string): unknown {
   if (!isRecord(source)) {
     return undefined;
@@ -44,10 +56,18 @@ function mediaValue(source: unknown, key: string): unknown {
   return value === null || value === undefined ? undefined : value;
 }
 
+/**
+ * 只接受非空字符串。
+ */
 function stringValue(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+/**
+ * 提取原始文件名。
+ * GramJS 不同媒体/版本的文件名字段不统一(fileName/file_name/filename/name),
+ * 逐个尝试,包括 document attributes 内的字段。
+ */
 function filenameFrom(value: unknown): string | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -72,6 +92,9 @@ function filenameFrom(value: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * 取出 document 的 attributes 数组(没有则返回空)。
+ */
 function attributesFrom(value: unknown): RecordLike[] {
   if (!isRecord(value) || !Array.isArray(value.attributes)) {
     return [];
@@ -80,15 +103,24 @@ function attributesFrom(value: unknown): RecordLike[] {
   return value.attributes.filter(isRecord);
 }
 
+/**
+ * attributes 项的类型标识,统一小写便于 includes 匹配。
+ */
 function attributeClassName(attribute: RecordLike): string {
   const className = stringValue(attribute.className) ?? stringValue(attribute.type);
   return className?.toLowerCase() ?? "";
 }
 
+/**
+ * 判断是否存在满足条件的 attribute。
+ */
 function hasAttribute(value: unknown, matcher: (attribute: RecordLike) => boolean): boolean {
   return attributesFrom(value).some(matcher);
 }
 
+/**
+ * 读取文件大小,同样兼容多种字段名。
+ */
 function readSize(value: unknown): number | undefined {
   if (!isRecord(value)) {
     return undefined;
@@ -104,6 +136,9 @@ function readSize(value: unknown): number | undefined {
   return undefined;
 }
 
+/**
+ * 照片有多个尺寸,取最大者(即原图大小)。
+ */
 function largestPhotoSize(value: unknown): number | undefined {
   if (!isRecord(value) || !Array.isArray(value.sizes)) {
     return undefined;
@@ -113,6 +148,9 @@ function largestPhotoSize(value: unknown): number | undefined {
   return sizes.length > 0 ? Math.max(...sizes) : undefined;
 }
 
+/**
+ * MIME 类型前缀匹配,如 hasMimeType(value, "video/")。
+ */
 function hasMimeType(value: unknown, prefix: string): boolean {
   if (!isRecord(value)) {
     return false;
@@ -122,6 +160,12 @@ function hasMimeType(value: unknown, prefix: string): boolean {
   return mimeType?.toLowerCase().startsWith(prefix) ?? false;
 }
 
+/**
+ * 以下 isXxx 都是嗅探函数:GramJS 没有统一的媒体类型判别字段,
+ * 只能靠 MIME / 扩展名 / document attributes 组合判断。
+ */
+
+/** 是否为动图(GIF)。 */
 function isGif(value: unknown): boolean {
   const filename = filenameFrom(value)?.toLowerCase();
   const mimeType = isRecord(value)
@@ -135,6 +179,7 @@ function isGif(value: unknown): boolean {
   );
 }
 
+/** 是否为语音消息(区别于普通音频文件)。 */
 function isVoice(value: unknown): boolean {
   if (isRecord(value) && value.voice === true) {
     return true;
@@ -145,6 +190,7 @@ function isVoice(value: unknown): boolean {
   });
 }
 
+/** 是否为普通音频。 */
 function isAudio(value: unknown): boolean {
   const filename = filenameFrom(value)?.toLowerCase();
   return (
@@ -154,6 +200,7 @@ function isAudio(value: unknown): boolean {
   );
 }
 
+/** 是否为普通视频。 */
 function isVideo(value: unknown): boolean {
   const filename = filenameFrom(value)?.toLowerCase();
   return (
@@ -163,6 +210,7 @@ function isVideo(value: unknown): boolean {
   );
 }
 
+/** 是否为圆形视频消息(round video note)。 */
 function isVideoMessage(value: unknown): boolean {
   if (!isRecord(value)) {
     return false;
@@ -175,6 +223,9 @@ function isVideoMessage(value: unknown): boolean {
     });
 }
 
+/**
+ * 回退文件名用的时间戳:YYYYMMDD_HHMMSS。
+ */
 function timestamp(date: Date): string {
   return [
     date.getFullYear().toString().padStart(4, "0"),
@@ -189,10 +240,16 @@ function timestamp(date: Date): string {
     ].join("");
 }
 
+/**
+ * 无原始文件名时的回退命名,如"视频_20260907_213000.mp4"。
+ */
 function fallbackFilename(kind: MediaKind, date: Date): string {
   return `${kind.type}_${timestamp(date)}${kind.extension}`;
 }
 
+/**
+ * 组装 MediaDescriptor;文件名优先原始文件名,缺失则用回退命名。
+ */
 function descriptorFor(
   source: unknown,
   media: unknown,
@@ -209,6 +266,12 @@ function descriptorFor(
   };
 }
 
+/**
+ * 媒体识别入口:从 GramJS 原始消息嗅探媒体类型。
+ * 判断顺序即优先级:photo/videoNote/gif/voice/audio/video 有专属字段先判;
+ * document 是兜底,再细分为视频消息/动图/语音/音频/视频/普通文件。
+ * 识别不了返回 undefined,调用方会静默忽略该消息。
+ */
 export function describeMedia(source: unknown, now: Date): MediaDescriptor | undefined {
   if (!isRecord(source)) {
     return undefined;
@@ -272,6 +335,9 @@ export function describeMedia(source: unknown, now: Date): MediaDescriptor | und
   return descriptorFor(source, document, MEDIA_KINDS.文件, now, readSize(document));
 }
 
+/**
+ * 格式化字节数为人类可读文本,如 "10.0 MB"。
+ */
 export function formatBytes(sizeBytes: number): string {
   if (!Number.isFinite(sizeBytes) || sizeBytes <= 0) {
     return "0.0 B";
@@ -286,6 +352,10 @@ export function formatBytes(sizeBytes: number): string {
   return `${value.toFixed(1)} ${units[unitIndex]}`;
 }
 
+/**
+ * 进度节流:每 5% 才汇报一次(100% 必报),
+ * 避免频繁编辑消息触发 Telegram 限流。
+ */
 export function shouldReportProgress(
   previouslyReportedPercent: number,
   downloadedBytes: number,
@@ -299,6 +369,9 @@ export function shouldReportProgress(
   return percent >= 100 || percent - previouslyReportedPercent >= 5;
 }
 
+/**
+ * 生成进度条文本,如:⬇️ 正在下载 视频 [████░░░░░░] 42% (4.2 MB / 10.0 MB)。
+ */
 function progressText(
   type: SupportedMediaType,
   downloadedBytes: number,
@@ -310,6 +383,10 @@ function progressText(
   return `⬇️ 正在下载 ${type} [${bar}] ${percent.toFixed(0)}% (${formatBytes(downloadedBytes)} / ${formatBytes(totalBytes)})`;
 }
 
+/**
+ * 下载编排:预留 .part → 下载进 .part(带进度汇报)→ 定稿为最终文件名。
+ * 任何一步失败都会清理 .part,不留半成品文件。
+ */
 export async function downloadMediaToStorage(input: {
   descriptor: MediaDescriptor;
   root: string;

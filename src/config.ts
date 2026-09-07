@@ -2,6 +2,9 @@ import { config as loadDotenv } from "dotenv";
 import { isAbsolute, resolve } from "node:path";
 import { z } from "zod";
 
+/**
+ * 校验通过后的应用配置。
+ */
 export interface AppConfig {
   telegram: {
     botToken: string;
@@ -17,17 +20,27 @@ export interface AppConfig {
   };
 }
 
+/**
+ * .env 的校验规则:启动时一次性校验,缺失或非法立即失败,
+ * 避免机器人连上 Telegram 之后才暴露配置问题。
+ */
 const environmentSchema = z.object({
   TELEGRAM_BOT_TOKEN: z.string().min(1),
   TELEGRAM_API_ID: z.coerce.number().int().positive(),
   TELEGRAM_API_HASH: z.string().min(1),
+  /** 用户 ID 保持字符串:Telegram ID 可能超出 JS 安全整数范围 */
   OWNER_USER_ID: z.string().regex(/^\d+$/),
+  /** 归档根目录必须是绝对路径,防止因工作目录不同而写错位置 */
   DOWNLOAD_ROOT: z.string().refine(isAbsolute),
   LOG_FILE: z.string().min(1).default("bot.log"),
   LOG_MAX_BYTES: z.coerce.number().int().positive().default(10 * 1024 * 1024),
   LOG_BACKUP_COUNT: z.coerce.number().int().positive().default(5),
 });
 
+/**
+ * 把 Zod 校验错误转成只含字段名的错误。
+ * 刻意不暴露字段值,防止敏感配置进入错误信息和日志。
+ */
 function invalidConfigurationError(error: z.ZodError): Error {
   const fields = [...new Set(error.issues.map((issue) => issue.path[0]))]
     .filter((field): field is string => typeof field === "string")
@@ -36,6 +49,9 @@ function invalidConfigurationError(error: z.ZodError): Error {
   return new Error(`Invalid configuration fields: ${fields}`);
 }
 
+/**
+ * 校验环境变量并返回应用配置;env/cwd 参数化便于调用方替换来源。
+ */
 export function parseConfig(
   env: Record<string, string | undefined>,
   _cwd: string,
@@ -62,6 +78,9 @@ export function parseConfig(
   };
 }
 
+/**
+ * 加载并校验配置:先读 .env(dotenv 不会覆盖已存在的环境变量),再校验。
+ */
 export function loadConfig(cwd?: string): AppConfig {
   const actualCwd = cwd ?? process.cwd();
   const envFile = resolve(actualCwd, ".env");
