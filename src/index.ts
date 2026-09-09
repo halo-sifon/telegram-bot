@@ -1,4 +1,3 @@
-import { pathToFileURL } from "node:url";
 import { loadConfig } from "./config.js";
 import { createLogger } from "./logger.js";
 import { startBot } from "./bot.js";
@@ -63,13 +62,9 @@ export async function run(deps: RunDependencies = defaultDependencies): Promise<
 }
 
 /**
- * ESM 版的 require.main 判断:被作为模块导入时不自动启动。
+ * 启动应用，并将启动阶段的致命错误写入 stderr。
+ * 独立入口模块可调用此函数，不需要依赖具体的进程管理器。
  */
-function isMainModule(): boolean {
-  const entrypoint = process.argv[1];
-  return entrypoint !== undefined && import.meta.url === pathToFileURL(entrypoint).href;
-}
-
-if (isMainModule()) {
-  run().catch(reportFatalError);
+export function start(): void {
+  void run().catch(reportFatalError);
 }

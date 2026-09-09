@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev        # 开发模式：直接运行 TypeScript,文件变更自动重启(tsx watch)
 npm run typecheck  # 只做类型检查,不产出文件(tsc --noEmit)
 npm run build      # 编译 src/ → dist/(tsc -p tsconfig.json)
-npm start          # 运行编译产物 dist/index.js
+npm start          # 运行编译产物 dist/main.js
 
 # 生产环境(PM2):
 npm run build && pm2 start ecosystem.config.json
@@ -22,7 +22,7 @@ pm2 restart telegram-bot   # 修改源码或 .env 后必须重启(先重新 buil
 
 单进程 Telegram 机器人:把所有者私聊中的媒体文件下载到本地按月归档目录(`DOWNLOAD_ROOT/YYYY/MM`)。无云上传,无 HTTP 服务。
 
-请求链路:`index.ts`(入口,组装配置/日志/机器人,处理 SIGINT/SIGTERM 优雅退出)→ `bot.ts`(GramJS 边界层)→ `media.ts`(媒体识别 + 下载编排)→ `storage.ts`(文件系统)。
+请求链路:`main.ts`(可执行入口)→ `index.ts`(组装配置/日志/机器人,处理 SIGINT/SIGTERM 优雅退出)→ `bot.ts`(GramJS 边界层)→ `media.ts`(媒体识别 + 下载编排)→ `storage.ts`(文件系统)。
 
 模块边界:
 
@@ -41,4 +41,4 @@ GramJS `Message` 的发送和编辑方法**参数名不同**:
 
 ## 配置
 
-`.env`(已 gitignore,绝不提交)存放 Telegram 凭据和 `OWNER_USER_ID` / `DOWNLOAD_ROOT`,模板见 `.env.example`。`ecosystem.config.json` 写死了项目绝对路径 `/Users/sifon/docker/telegram-bot`,运行编译产物 `dist/index.js`。
+`.env`(已 gitignore,绝不提交)存放 Telegram 凭据和 `OWNER_USER_ID` / `DOWNLOAD_ROOT`,模板见 `.env.example`。`ecosystem.config.json` 写死了项目绝对路径 `/Users/sifon/docker/telegram-bot`,运行编译产物 `dist/main.js`。

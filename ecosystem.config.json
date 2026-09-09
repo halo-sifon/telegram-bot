@@ -3,7 +3,7 @@
     {
       "name": "telegram-bot",
       "cwd": "/Users/sifon/docker/telegram-bot",
-      "script": "dist/index.js",
+      "script": "dist/main.js",
       "autorestart": true,
       "env": {
         "NODE_ENV": "production"
